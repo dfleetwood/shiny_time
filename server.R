@@ -377,6 +377,33 @@ server <- function(input, output, session) {
   })
 
 
+  #-----------------------------------------------------------
+  #Calendar
+  #-----------------------------------------------------------
+  output$taskCalendar <- renderCalendar ({
+    tasks = data$tasks
+    ooos = data$ooos
+
+    if (nrow (tasks) > 0){
+       tasks$title = tasks$Name
+       tasks$start = tasks$Task_Start
+       tasks$end = tasks$Task_End
+       tasks$calendarId = "tasks"
+
+       ooos$title = ooos$name
+       ooos$calendarId = "events"
+
+       calendar(readOnly = FALSE, useNav = TRUE) %>%
+          set_calendars_props(id = "tasks", name = "Tasks", color = "#FFF", bgColor = "#2c3e50") %>% 
+          set_calendars_props(id = "events", name = "Events", color = "#FFF", bgColor = "#95a5a6") %>% 
+          add_schedule_df(tasks) %>%
+          add_schedule_df(ooos)
+    } else {
+      calendar(readOnly = FALSE, useNav = TRUE)
+    }
+  })
+
+
   # output$taskTable <- renderDataTable ({
   #   data$ooos
   # })

@@ -16,6 +16,7 @@ library(DT)
 #library (stringi)
 library (shinyjs)
 library(tuicalendr)
+
 #library(shinycssloaders)
 
 
@@ -62,6 +63,7 @@ view <- navbarPage("Shiny time",id ="tabs", theme = shinytheme("flatly"),
             #textOutput("taskPert50")
           ),
           hr(),
+          calendarOutput ('taskCalendar'),
           DTOutput ('taskTable')
         )
     )
