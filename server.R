@@ -373,6 +373,7 @@ server <- function(input, output, session) {
         RETURN count (task)
       ", data = task_schedules)$to_data_frame()
 
+      data$tasks = get_tasks(project = isolate (input$projectSelect))
     }
   })
 

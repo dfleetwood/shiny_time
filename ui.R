@@ -63,10 +63,12 @@ view <- navbarPage("Shiny time",id ="tabs", theme = shinytheme("flatly"),
             #textOutput("taskPert50")
           ),
           hr(),
-          calendarOutput ('taskCalendar'),
           DTOutput ('taskTable')
         )
     )
+  ),
+  tabPanel (title = "Planner", value = "planner",
+     calendarOutput ('taskCalendar')
   )
 )
 
