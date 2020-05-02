@@ -1,0 +1,20 @@
+version: "3.3"
+
+services:
+  shiny:
+    image: rocker/shiny
+    ports:
+      - "3838:3838"
+    volumes:
+      - C:/Users/dfleetwood/Documents/shiny_time/shiny:/srv/shiny-server
+    #network_mode: "host"
+
+  neo4j:
+    image: bitnami/neo4j
+    ports:
+      - "7474:7474"
+      - "7373:7373"
+      - "7687:7687"
+    volumes:
+      - C:/Users/dfleetwood/Documents/shiny_time/neo4j:/bitnami
+    #network_mode: "host"
