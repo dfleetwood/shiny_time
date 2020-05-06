@@ -16,14 +16,21 @@ library(DT)
 #library (stringi)
 library (shinyjs)
 library(tuicalendr)
+library (timevis)
+#library(vistime)
+#library (plotly)
+#library(shinydashboardPlus)
 
 #library(shinycssloaders)
 
 
 label_opts = "All"
 view <- navbarPage("Shiny time",id ="tabs", theme = shinytheme("flatly"), 
+
   
   tabPanel (title = "Tasks", value = "tasks",
+      shinyjs::useShinyjs(),
+      
       sidebarLayout(
         sidebarPanel(
           selectInput('projectSelect', 'Project', selected = "None", label_opts, multiple=FALSE, selectize=FALSE, size = 15),
@@ -49,7 +56,8 @@ view <- navbarPage("Shiny time",id ="tabs", theme = shinytheme("flatly"),
               )
             ),
             column (6,
-              selectInput('taskDependencies', 'Dependences', list ('None'), multiple=TRUE, selectize=FALSE, size = 5)
+              selectInput('taskDependencies', 'Dependences', list ('None'), multiple=TRUE, selectize=FALSE, size = 5),
+              sliderInput("taskPercentComplete",label="Percent Complete", min = 0, max = 100, post  = " %", value = 0)
             ),
             actionButton ('addTaskBtn', "Add/Update task"),
             #actionButton ('updateTaskBtn', "Update task"),
@@ -63,12 +71,15 @@ view <- navbarPage("Shiny time",id ="tabs", theme = shinytheme("flatly"),
             #textOutput("taskPert50")
           ),
           hr(),
+          checkboxInput('showComplete', 'Show complete', value = FALSE),
           DTOutput ('taskTable')
         )
     )
   ),
   tabPanel (title = "Planner", value = "planner",
-     calendarOutput ('taskCalendar')
+    timevisOutput("taskTimeline"),
+   # plotlyOutput ("taskTimeline"),
+    calendarOutput ('taskCalendar')
   )
 )
 

@@ -69,47 +69,49 @@ def createOutofOffices(ndays, today, start_work_time, end_work_time):
 
         xx_wd = xx_date.weekday()
 
-        if xx_wd <= 4:
-            if xx_wd == 4:
-                new_cal_start = xx_date.strftime("%Y%m%d") + end_work_time #END_WORK_TIME
-                new_cal_end = xx_date + datetime.timedelta(days=1)
-                new_cal_end = new_cal_end.strftime("%Y%m%d")
-                new_cal_end = datetime.datetime.strptime(
-                    new_cal_end + "00:00", "%Y%m%d%H:%M")
-            if xx_wd == 5:
-                new_cal_start = xx_date.strftime("%Y%m%d") + "00:01"
-                new_cal_end = xx_date + datetime.timedelta(days=1)
-                new_cal_end = new_cal_end.strftime("%Y%m%d")
-                new_cal_end = datetime.datetime.strptime(
-                    new_cal_end + "00:00", "%Y%m%d%H:%M")
-            if xx_wd == 6:
-                new_cal_start = xx_date.strftime("%Y%m%d") + "00:01"
-                new_cal_end = xx_date + datetime.timedelta(days=1)
-                new_cal_end = new_cal_end.strftime("%Y%m%d")
-                new_cal_end = datetime.datetime.strptime(
-                    new_cal_end + START_WORK_TIME, "%Y%m%d%H:%M")
-            elif xx_wd < 4:
-                new_cal_start = xx_date.strftime("%Y%m%d") + end_work_time #END_WORK_TIME
-                new_cal_end = xx_date + datetime.timedelta(days=1)
-                new_cal_end = new_cal_end.strftime("%Y%m%d")
-                new_cal_end = datetime.datetime.strptime(
-                    new_cal_end + START_WORK_TIME, "%Y%m%d%H:%M")
+        #if xx_wd <= 4:
+        if xx_wd == 4:
+            new_cal_start = xx_date.strftime("%Y%m%d") + end_work_time #END_WORK_TIME
+            new_cal_end = xx_date + datetime.timedelta(days=1)
+            new_cal_end = new_cal_end.strftime("%Y%m%d")
+            new_cal_end = datetime.datetime.strptime(
+                new_cal_end + "00:00", "%Y%m%d%H:%M")
+        if xx_wd == 5:
+            new_cal_start = xx_date.strftime("%Y%m%d") + "00:01"
+            new_cal_end = xx_date + datetime.timedelta(days=1)
+            new_cal_end = new_cal_end.strftime("%Y%m%d")
+            new_cal_end = datetime.datetime.strptime(
+                new_cal_end + "00:00", "%Y%m%d%H:%M")
+        if xx_wd == 6:
+            new_cal_start = xx_date.strftime("%Y%m%d") + "00:01"
+            new_cal_end = xx_date + datetime.timedelta(days=1)
+            new_cal_end = new_cal_end.strftime("%Y%m%d")
+            new_cal_end = datetime.datetime.strptime(
+                new_cal_end + start_work_time, "%Y%m%d%H:%M")
+        elif xx_wd < 4:
+            new_cal_start = xx_date.strftime("%Y%m%d") + end_work_time #END_WORK_TIME
+            new_cal_end = xx_date + datetime.timedelta(days=1)
+            new_cal_end = new_cal_end.strftime("%Y%m%d")
+            new_cal_end = datetime.datetime.strptime(
+                new_cal_end + start_work_time, "%Y%m%d%H:%M")
 
-            #new_cal_end = new_cal_end.strftime("%Y%m%d")
-            #new_cal_end = datetime.datetime.strptime (new_cal_end + START_WORK_TIME, "%Y%m%d%H:%M")
+        #new_cal_end = new_cal_end.strftime("%Y%m%d")
+        #new_cal_end = datetime.datetime.strptime (new_cal_end + start_work_time, "%Y%m%d%H:%M")
 
-            new_cal_start = datetime.datetime.strptime(
-                new_cal_start, "%Y%m%d%H:%M")
+        new_cal_start = datetime.datetime.strptime(
+            new_cal_start, "%Y%m%d%H:%M")
 
-            dur = new_cal_end - new_cal_start
-            dur_mins = dur / datetime.timedelta(minutes=1)
+        dur = new_cal_end - new_cal_start
+        dur_mins = dur / datetime.timedelta(minutes=1)
 
-            new_cal_end = new_cal_end.strftime("%d/%m/%Y %H:%M")
-            new_cal_start = new_cal_start.strftime("%d/%m/%Y %H:%M")
+        new_cal_end = new_cal_end.strftime("%Y/%m/%d %H:%M:%S")
+        new_cal_start = new_cal_start.strftime("%Y/%m/%d %H:%M:%S")
+        #new_cal_end = new_cal_end.strftime("%d/%m/%Y %H:%M")
+        #new_cal_start = new_cal_start.strftime("%d/%m/%Y %H:%M")
 
-            ooo_starts.append(new_cal_start)
-            ooo_ends.append(new_cal_end)
-            ooo_dur_mins.append(dur_mins)
+        ooo_starts.append(new_cal_start)
+        ooo_ends.append(new_cal_end)
+        ooo_dur_mins.append(dur_mins)
 
         xx_date = xx_date + datetime.timedelta(days=1)
 

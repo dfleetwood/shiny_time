@@ -26,7 +26,7 @@ def get_calendar (account):
 
     events = []
     for event in calendar.get_events(query = q,limit = 9999):
-        if (~event.is_all_day) & (~event.is_cancelled):
+        if not event.is_all_day and not event.is_cancelled:
             events.append ({
             'start': event.start.strftime("%Y/%m/%d %H:%M:%S"),
             'end': event.end.strftime("%Y/%m/%d %H:%M:%S"),

@@ -17,6 +17,9 @@ library (lubridate)
 library (mc2d)
 library (dplyr)
 library (tidyr)
+#library(vistime)
+library (timevis)
+library (plotly)
 
 server <- function(input, output, session) {
 
@@ -24,17 +27,18 @@ server <- function(input, output, session) {
   #Time functions
   #---------------------------
   real_time_delta_mins <- function (start, finish, ooos){
-    ooos$start = ymd_hms (ooos$start)
-    ooos$end = ymd_hms (ooos$end)
+    ooos$start = ooos$start
+    ooos$end = ooos$end
 
-    ooos = merge_overlapping_times(ooos)
+    #ooos = merge_overlapping_times(ooos)
+    ooos = merge_overlapping_times_full(ooos)
     
     time_diff_mins = as.numeric (difftime (finish, start, units= "mins"))
     
-    ooos_to_add = ooos [(ooos$start >= ymd_hms (start)) & (ooos$end <= ymd_hms (finish)),]
+    ooos_to_add = ooos [(ooos$start >= start) & (ooos$end <= finish),]
     total_ooo_mins =  0
     if (nrow (ooos_to_add) > 0){
-      total_ooo_mins = sum (as.numeric (difftime (ymd_hms (ooos_to_add$end), ymd_hms (ooos_to_add$start), units = "mins")))
+      total_ooo_mins = sum (as.numeric (difftime (ooos_to_add$end, ooos_to_add$start, units = "mins")))
     }
     
     time_diff_mins = time_diff_mins - total_ooo_mins
@@ -42,19 +46,47 @@ server <- function(input, output, session) {
   }
 
   prob_hitting_deadline <- function (time_now, tasks, ooos){
+    ooos = merge_overlapping_times_full (ooos)
+
     start = time_now
+
+    #If we're starting in an event - move the start to after the event
+    in_event_start = (start >= ooos$start) & (start < ooos$end)
+    if (sum (in_event_start) > 0){
+      start = ooos$end[in_event_start]
+    }
+
     prob_hit_deadline = NULL
+
+    #in_event_deadline = (ooos$start > tasks$Deadline) & (ooos$start <= tasks$Deadline)
+    #tasks$Deadline [in_event_deadline,[]
+
     for (i in 1:nrow (tasks)){
       finish = tasks$Deadline [i] 
+      in_event_deadline = (ymd_hms (finish) > ymd_hms (ooos$start)) & (ymd_hms (finish) <= ymd_hms (ooos$end))
+      if (sum (in_event_deadline) > 0){
+        shinyjs::logjs ("moving deadline")
+        finish = ooos$start[in_event_deadline]
+      }
       
+      shinyjs::logjs (as.character (start))
+      shinyjs::logjs (as.character (finish))
+
       cum_most_likely = sum (tasks$Most_Likely_Hours [1:i])
       cum_min = sum (tasks$Min_Hours [1:i])
       cum_max = sum (tasks$Max_Hours [1:i])
+
+      shinyjs::logjs (as.character (cum_most_likely))
+     
       
       
       real_min_available = real_time_delta_mins (start, finish, ooos)
+
+      shinyjs::logjs (as.character (real_min_available / 60))
       
       prob_hit_deadline = c(prob_hit_deadline, ppert (real_min_available/60, cum_min, cum_most_likely, cum_max))
+
+      shinyjs::logjs (as.character (prob_hit_deadline))
     }
     return (prob_hit_deadline)
   }
@@ -62,7 +94,12 @@ server <- function(input, output, session) {
 
 
   #Needs a dataframe with 'start' and 'end' dates as dates
-  merge_overlapping_times <- function (df) {
+  merge_overlapping_times_full <- function (df) {
+    df$start = df$start
+    df$end = df$end
+    
+    df = df [order (df$start),]
+    
     df = df %>%
       mutate(indx = c(0, cumsum(as.numeric(lead(start)) >
                                   cummax(as.numeric(end)))[-n()])) %>%
@@ -72,69 +109,155 @@ server <- function(input, output, session) {
     return (as.data.frame (df[,c("start", "end")]))
   }
 
+  # merge_overlapping_times <- function (df) {
+  #   df$start = ymd_hms (df$start)
+  #   df$end = ymd_hms (df$end)
 
-  adjust_start_times <- function (start_time, minutes_to_add, start_ooo, end_ooo){ 
-    curr_start_time = start_time
-    curr_end_time = curr_start_time + minutes (minutes_to_add)
+  #   df$start = as.character (df$start)
+  #   df$end = as.character (df$end)
+  #   write.csv (df, "cal_to_merge.csv")
 
-    #If a task is due to start within an OOO, move it to start after the OOO
-    if ((curr_start_time >= start_ooo) & (curr_start_time < end_ooo)){
-      #print ("start within ooo")
-      curr_start_time = end_ooo
-      curr_end_time = curr_start_time + minutes (minutes_to_add)
-    }
+  #   df = df %>%
+  #     mutate(indx = c(0, cumsum(as.numeric(lead(start)) >
+  #                                 cummax(as.numeric(end)))[-n()])) %>%
+  #     group_by(indx) %>%
+  #     summarise(start = min(start), end = max(end))
     
-    return (list (curr_start_time, curr_end_time))
-  }
+  #   return (as.data.frame (df[,c("start", "end")]))
+  # }
 
 
-  adjust_end_times <- function (start_time, minutes_to_add, start_ooo, end_ooo){ 
+  # adjust_start_times <- function (start_time, minutes_to_add, start_ooo, end_ooo){ 
+  #   curr_start_time = start_time
+  #   curr_end_time = curr_start_time + minutes (minutes_to_add)
+
+  #   #If a task is due to start within an OOO, move it to start after the OOO
+  #   if ((curr_start_time >= start_ooo) & (curr_start_time < end_ooo)){
+  #     shinyjs::logjs("start within ooo")
+  #     shinyjs::logjs(print (start_ooo))
+  #     shinyjs::logjs(print (end_ooo))
+  #     curr_start_time = end_ooo
+  #     curr_end_time = curr_start_time + minutes (minutes_to_add)
+  #   }
     
-    curr_start_time = start_time
-    curr_end_time = curr_start_time + minutes (minutes_to_add)
+  #   return (list (curr_start_time, curr_end_time))
+  # }
+
+
+  # adjust_end_times <- function (start_time, minutes_to_add, start_ooo, end_ooo){ 
     
-    #If the end time falls within an ooo, move it to be after the end of the ooo by
-    #the amount that it's currrently within it
-    if ((curr_end_time > start_ooo) & (curr_end_time < end_ooo)){
-      #print ("end within ooo")
-      curr_end_time = end_ooo + minutes (curr_end_time - start_ooo)
-    }  else if ((curr_start_time <= start_ooo) & (curr_end_time >= end_ooo)){   #If the ooo falls within the task, add the ooo length to the current end time
-      #print ("fully within")
-      ooo_length = end_ooo - start_ooo
-      #diff_to_add = task_length - ((start_ooo - curr_start_time) + (curr_end_time - end_ooo))
-      diff_to_add = ooo_length - (start_ooo - curr_start_time)# + (curr_end_time - end_ooo))
-      #print (diff_to_add)
+  #   curr_start_time = start_time
+  #   curr_end_time = curr_start_time + minutes (minutes_to_add)
+    
+  #   #If the end time falls within an ooo, move it to be after the end of the ooo by
+  #   #the amount that it's currrently within it
+  #   if ((curr_end_time > start_ooo) & (curr_end_time < end_ooo)){
+  #     shinyjs::logjs ("end within ooo")
+  #     curr_end_time = end_ooo + minutes (curr_end_time - start_ooo)
+  #   }  else if ((curr_start_time <= start_ooo) & (curr_end_time >= end_ooo)){   #If the ooo falls within the task, add the ooo length to the current end time
+  #     shinyjs::logjs ("end fully within ooo")
+  #     #print ("fully within")
+  #     ooo_length = end_ooo - start_ooo
+  #     #diff_to_add = task_length - ((start_ooo - curr_start_time) + (curr_end_time - end_ooo))
+  #     diff_to_add = ooo_length - (start_ooo - curr_start_time)# + (curr_end_time - end_ooo))
+  #     #print (diff_to_add)
       
-      curr_end_time = curr_end_time + ooo_length #hours (diff_to_add)#ooo_length) #hours (diff_to_add)
-    }
+  #     curr_end_time = curr_end_time + ooo_length #hours (diff_to_add)#ooo_length) #hours (diff_to_add)
+  #   }
     
-    return (list (curr_start_time, curr_end_time))
+  #   return (list (curr_start_time, curr_end_time))
+  # }
+
+
+  # adjust_times <- function (current_start_time, minutes_to_add, ooos){
+  #   shinyjs::logjs("max event length PRE_MERGE")
+  #   shinyjs::logjs(max (as.numeric (difftime (ymd_hms (ooos$end), ymd_hms (ooos$start), units= "days"))))
+
+  #   #ooos = merge_overlapping_times(ooos)
+  #   ooos = merge_overlapping_times_full(ooos)
+    
+  #   shinyjs::logjs("max event length POST MERGE")
+  #   shinyjs::logjs(max (as.numeric (difftime (ymd_hms (ooos$end), ymd_hms (ooos$start), units= "days"))))
+  #   #shinyjs::logjs(max (ymd_hms (ymd_hms (ooos$end)) - ymd_hms (ooos$start)))
+
+  #   shinyjs::logjs("adjust start")
+  #   shinyjs::logjs(current_start_time)
+
+  #   shinyjs::logjs("is in ooos")
+  #   shinyjs::logjs(sum((ooos$start <= current_start_time) & (ooos$end > current_start_time)))
+
+  #   ooos = ooos [order (ooos$start),]
+  #   for (ooo_i in 1:nrow (ooos)){
+  #     adjusted_times = adjust_start_times (current_start_time, minutes_to_add, ooos$start [ooo_i], ooos$end [ooo_i])
+  #     current_start_time= adjusted_times[[1]]
+  #     current_end_time= adjusted_times[[2]]
+ 
+  #     #shinyjs::logjs(current_start_time)
+  #   }
+  #   shinyjs::logjs("adjusted start")
+  #   shinyjs::logjs(current_start_time)
+
+  #   shinyjs::logjs("adjusted end")
+  #   shinyjs::logjs(current_end_time)
+
+  #   # current_start_time
+  #   # current_end_time
+    
+    
+  #   ooos = ooos [order (ooos$end),]
+  #   for (ooo_i in 1:nrow (ooos)){
+  #     adjusted_times = adjust_start_times (current_start_time, minutes_to_add, ooos$start [ooo_i], ooos$end [ooo_i])
+  #     #adjusted_times = adjust_end_times (current_start_time, minutes_to_add, ooo[1], ooo[2])
+  #     current_start_time= adjusted_times[[1]]
+  #     current_end_time= adjusted_times[[2]]
+  #   }
+    
+  #   return (list (current_start_time, current_end_time))
+  # }
+
+
+  adjust_times <- function (task_start, minutes_to_add, ooos){
+    ooos = merge_overlapping_times_full(ooos)
+
+    #Set up ooos - precalc free time in between tasks and cumsum them
+    ooos$free_time_lead = difftime (ooos$start, lag (ooos$end), units = "mins")
+    ooos$free_time_lead = as.numeric (ooos$free_time_lead)
+    ooos$free_time_lead [is.na (ooos$free_time_lead)] = 0
+    ooos$cum_free_time_lead = cumsum (ooos$free_time_lead)
+
+    #Move start time (move to end of task if trying to start in the middle of one)
+    task_in_oos = (ooos$start <= task_start) & (ooos$end >= task_start)
+    if (sum (task_in_oos) > 0){
+      new_start = max (ooos$end [task_in_oos])
+    } else {
+      new_start = task_start
+    }
+
+    #Get new end time
+    future_ooos = ooos$start > new_start
+    if (sum (future_ooos) > 0){
+      next_ooos = min (which (future_ooos))
+      ###Calculate time we have until the next task
+      free_time_to_next_task = difftime (ooos$start [next_ooos], new_start, units = "mins")
+      ###Calculate the cumulative time available for tasks after the next (which will be set to zero as we've already accounted for it)
+      total_free_time = ooos$cum_free_time_lead - ooos$cum_free_time_lead [next_ooos]
+      ###Find the last task that gives us as much free time as we need
+     # shinyjs::logjs("here")
+    #  shinyjs::logjs(next_ooos)
+    #  shinyjs::logjs(minutes_to_add)
+    #  shinyjs::logjs(free_time_to_next_task)
+     # shinyjs::logjs(total_free_time)
+
+      last_ooos_idx = max (which (total_free_time <= (minutes_to_add - free_time_to_next_task)))
+      ###
+      time_to_add = round (as.numeric(minutes_to_add - free_time_to_next_task) - total_free_time [last_ooos_idx])
+      ###
+      new_end = ooos$end[last_ooos_idx] + minutes (time_to_add)
+    } else {
+      new_end = new_start + minutes (minutes_to_add)
+    }
+    return (list (new_start, new_end))
   }
-
-
-  adjust_times <- function (current_start_time, minutes_to_add, ooos){
-    ooos = merge_overlapping_times(ooos)
-    
-    ooos = ooos [order (ooos$start),]
-    for (ooo in ooos){
-      adjusted_times = adjust_start_times (current_start_time, minutes_to_add, ooo[1], ooo[2])
-      current_start_time= adjusted_times[[1]]
-      current_end_time= adjusted_times[[2]]
-    }
-    # current_start_time
-    # current_end_time
-    
-    
-    ooos = ooos [order (ooos$end),]
-    for (ooo in ooos){
-      adjusted_times = adjust_end_times (current_start_time, minutes_to_add, ooo[1], ooo[2])
-      current_start_time= adjusted_times[[1]]
-      current_end_time= adjusted_times[[2]]
-    }
-    
-    return (list (current_start_time, current_end_time))
-  }
-
 
   #--------------------------
   #Connect to neo4j
@@ -152,9 +275,14 @@ server <- function(input, output, session) {
                task.max_hours AS Max_Hours,
                task.task_start AS Task_Start,
                task.task_end AS Task_End,
-               task.prob_hitting_deadline AS Prob_Hitting_Deadline
+               task.prob_hitting_deadline AS Prob_Hitting_Deadline,
+               task.percent_complete AS Percent_Complete
 
     ", current_project = project)$to_data_frame()
+
+    tasks$Deadline = ymd_hms (tasks$Deadline, tz = "UTC")
+
+
     return (tasks)
   }
 
@@ -169,8 +297,15 @@ server <- function(input, output, session) {
                task.most_likely_hours AS Most_Likely_Hours,
                task.min_hours AS Min_Hours,
                task.max_hours AS Max_Hours,
-               project.name AS project
+               project.name AS project,
+               task.task_start AS Task_Start,
+               task.task_end AS Task_End,
+               task.prob_hitting_deadline AS Prob_Hitting_Deadline,
+               task.percent_complete AS Percent_Complete
                ")$to_data_frame()
+
+    tasks$Deadline = ymd_hms (tasks$Deadline, tz = "UTC") 
+
     return (tasks)
   }
 
@@ -179,8 +314,14 @@ server <- function(input, output, session) {
     events = graph$graph$run(
       "
         MATCH (event :CalendarEvent)
-        RETURN event.start AS start, event.end AS end, event.id AS id, event.name AS name, event.editable AS event 
+        RETURN toString(event.start) AS start, toString (event.end) AS end, event.id AS id, event.name AS name, event.editable AS event 
       ")$to_data_frame()
+
+    events$start = ymd_hms (events$start, tz = "UTC") # + hour (1) # TODO: treat timezones properly!
+    events$end = ymd_hms (events$end, tz = "UTC") #+ hour (1) # TODO: treat timezones properly!
+
+    #shinyjs::logjs("max event length FROM DB")
+    #shinyjs::logjs(max (as.numeric (difftime (ymd_hms (events$end), ymd_hms (events$start), units= "days"))))
     return (events)
   }
 
@@ -205,6 +346,7 @@ server <- function(input, output, session) {
   data$current_task = data.frame(name=character()) 
   data$ooos = data.frame(id=integer()) 
   data$all_tasks = data.frame(id=integer()) 
+  data$recalculate = FALSE
 
 
   #-----------
@@ -224,17 +366,24 @@ server <- function(input, output, session) {
   source_python ("get_calendar.py")
   print ("Getting auth url")
   auth <<- get_authorization_url()
-  showModal(calendarOAuthModal(auth[[1]]))
+  #showModal(calendarOAuthModal(auth[[1]]))
+  
+  #Here
+  data$ready = TRUE
+  data$recalculate = TRUE
+  #data$all_tasks = get_all_tasks()
+
 
   observeEvent(input$calendarOAuthOk, {
       print ("Completing verification")
       # Check that data object exists and is data frame.
       complete_verification (input$calendarOAuthUrl, auth[[2]], auth[[3]])
       data$ready = TRUE
-      #ooos = get_calendar(auth[[3]])
+      data$recalculate = TRUE
+     # ooos = get_calendar(auth[[3]])
 
       #all_tasks = get_all_tasks()
-      data$all_tasks = get_all_tasks()
+      #data$all_tasks = get_all_tasks()
       removeModal()
   })
 
@@ -246,39 +395,48 @@ server <- function(input, output, session) {
     showNotification(ready)
     return (data$ready)
   }
+ 
   get_calendar_events <- function(){
-    #Get calendar event from O365 API
-    events = get_calendar(auth[[3]])
+    tryCatch({
+      showNotification("Fetching calendar events")
 
-    events_lists = list()
-    for (i in 1:nrow (events)){
-      event_list = list()
-      event_list [['id']] = events[i, "id"]
-      event_list [['name']] = events[i, "name"]
-      event_list [['start']] = events[i, "start"]
-      event_list [['end']] = events[i, "end"]
-      event_list [['editable']] = FALSE
-      events_lists[[i]] = event_list
-    }
-    #Update database with events
-    graph = get_graph()
-    graph$graph$run(
-      "
-        UNWIND $data as row
-        MERGE (event :CalendarEvent {id: row.id})
-        SET event = row      
-      ",
-      data = events_lists)
+      #Get calendar event from O365 API
+      events = get_calendar(auth[[3]])
 
-    #Get all calendar events out of the database, including OOO (out of office) ones not obtained from the O365 API
-    data$ooos = get_events()
-     #data$ooos = get_calendar(auth[[3]])
-     #ooos_len = as.character (nrow (events))
-     #showNotification(ooos_len)
+      events_lists = list()
+      for (i in 1:nrow (events)){
+        event_list = list()
+        event_list [['id']] = events[i, "id"]
+        event_list [['name']] = events[i, "name"]
+        event_list [['start']] = events[i, "start"]
+        event_list [['end']] = events[i, "end"]
+        event_list [['editable']] = FALSE
+        events_lists[[i]] = event_list
+      }
+      #Update database with events
+      graph = get_graph()
+      graph$graph$run(
+        "
+          UNWIND $data as row
+          MERGE (event :CalendarEvent {id: row.id})
+          SET event = row      
+        ",
+        data = events_lists)
+
+
+      data$recalculate = TRUE
+    },
+    error = function(e) {
+      #showNotification("Error")
+      shinyjs::logjs(print (e))
+      data$ready = FALSE
+      auth <<- get_authorization_url()
+      showModal(calendarOAuthModal(auth[[1]]))
+    })
   }
   #Trigger calendar refresh
   observe ({
-    invalidateLater(600000, session)
+    invalidateLater(300000, session)
     if (is_ready()){
       get_calendar_events()
     }
@@ -291,89 +449,138 @@ server <- function(input, output, session) {
     #-----------
     #Order tasks
     #----------
-    tasks = data$all_tasks
-    ooos = data$ooos
+    #showNotification (Sys.timezone())
 
-    #tasks = tasks [!is.na(tasks$most_likely_hours),]
+    if (data$recalculate){
+      tasks = get_all_tasks() #isolate (data$all_tasks)
+      ooos = get_events ()# isolate (data$ooos)
 
-    if ((nrow (tasks) > 0) & (nrow (ooos) > 0)){
-
-      ooos$start = ymd_hms (ooos$start)
-      ooos$end = ymd_hms (ooos$end)
+      #shinyjs::logjs("max event length FROM CALC")
+      #shinyjs::logjs(max (as.numeric (difftime (ymd_hms (ooos$end), ymd_hms (ooos$start), units= "days"))))
 
 
-    
-      #Calcuate pert hours (e.g. 80% certainty of completing job within) 
-      pert_hours = NULL
-      for (i in 1:nrow (tasks)){
-        pert_hours = c(pert_hours, qpert (0.8, as.numeric (tasks$Min_Hours[i]), as.numeric (tasks$Most_Likely_Hours[i]), as.numeric (tasks$Max_Hours[i])))
-      }
-      tasks$pert_hours = pert_hours
+      if ((nrow (tasks) > 0) & (nrow (ooos) > 0)){
+        showNotification("Recalculating start/end times")
+
+        tasks = tasks [!is.na(tasks$Most_Likely_Hours),]
+        tasks = tasks [!is.na(tasks$Deadline),]
+        tasks = tasks [tasks$Percent_Complete <= 99,]
+
+        #shinyjs::logjs (tasks)
+        #shinyjs::logjs (ooos)
+
+        ooos$start = ooos$start
+        ooos$end = ooos$end
+
+        #shinyjs::logjs("max event length AFTER CONVERSION")
+        #shinyjs::logjs(max (as.numeric (difftime (ymd_hms (ooos$end), ymd_hms (ooos$start), units= "days"))))
+
+        #Work out remaining time
+        tasks$Percent_Complete = tasks$Percent_Complete / 100
+        tasks$Min_Hours = tasks$Min_Hours * (1-tasks$Percent_Complete)
+        tasks$Most_Likely_Hours = tasks$Most_Likely_Hours * (1-tasks$Percent_Complete)
+        tasks$Max_Hours = tasks$Max_Hours * (1-tasks$Percent_Complete)
       
-      #Order tasks based on pert hours (percent of job versus time to deadline)
-      time_now = now()
-      tasks$hours_to_deadline = as.numeric (ymd_hms (tasks$Deadline) - time_now)
-      tasks$percent_work_rem = tasks$hours_to_deadline / tasks$pert_hours
-      
-      tasks = tasks [order (tasks$percent_work_rem),]
-      tasks$order = 1:nrow (tasks)
-     
-      #-----
-      #Calculate starts and finishes
-      #-----  
-      task_starts = NULL
-      task_finishes = NULL
-      current_finish= time_now
-      for (i in 1:nrow (tasks)){
-        #print (current_start)
-        adjusted_start_finish = adjust_times(current_finish, round (tasks$pert_hours[i]*60), ooos)
-        #print (adjusted_start_finish)
-        current_start = adjusted_start_finish[[1]]
-        current_finish = adjusted_start_finish[[2]] 
+        #Calcuate pert hours (e.g. 80% certainty of completing job within) 
+        pert_hours = NULL
+        for (i in 1:nrow (tasks)){
+          pert_hours = c(pert_hours, qpert (0.8, as.numeric (tasks$Min_Hours[i]), as.numeric (tasks$Most_Likely_Hours[i]), as.numeric (tasks$Max_Hours[i])))
+        }
+        tasks$pert_hours = pert_hours
         
-        task_starts = c(task_starts, as.character (current_start))
-        task_finishes = c(task_finishes, as.character (current_finish))
-      }
-      
-      tasks$task_start = task_starts
-      tasks$task_finish = task_finishes
+        #Order tasks based on remaining capacity vs demand for that capacity by other jobs
+        time_now = force_tz (now(), "UTC")
+        shinyjs::logjs ("time now utc")
+        shinyjs::logjs (time_now)
+        tasks$hours_to_deadline = as.numeric (difftime (tasks$Deadline, time_now, units = "hours")) #this should be real hours, not absolute
 
-      #Probability of hitting deadlines
-      tasks = tasks[order (tasks$task_start),]
-      tasks$prob_hitting_deadline = prob_hitting_deadline (time_now, tasks, ooos)
+        other_task_hours = NULL
+        for (i in 1:length (tasks$pert_hours)){
+          other_task_hours = c(other_task_hours, sum (tasks$pert_hours[-i]))
+        }
+        tasks = tasks [order (tasks$hours_to_deadline - other_task_hours),]
 
-      #--------
-      #Add to neo4j
-      #--------
-      task_schedules = list()
-      for (i in 1:nrow (tasks)){
-        task_schedule = list()
-        task_schedule[['tsk']] = as.character (tasks [i, "Name"])
-        task_schedule[['proj']] = as.character (tasks [i, "project"])
-        task_schedule[['task_start']] = as.character (tasks [i, "task_start"])
-        task_schedule[['task_end']] = as.character (tasks [i, "task_finish"])
-        task_schedule[['prob_hitting_deadline']] = as.character (tasks [i, "prob_hitting_deadline"])
+        #tasks$percent_work_rem = tasks$hours_to_deadline / tasks$pert_hours
         
-        task_schedules[[i]] = task_schedule
-      }
-      #Clear the task starts/finishes
-      graph = get_graph()
-      graph$graph$run ("
-        MATCH (task:Task)
-        SET task.task_start = null, task.task_end = null
-        ")
-      
-      #Merge the starts/finishes
-      graph = get_graph()
-      graph$graph$run ("
-        UNWIND $data AS row
-        MATCH (project:Project {name:row.proj})
-        MATCH (project) -[:HasTask]-> (task:Task {name: row.tsk})
-        SET task.task_start = row.task_start, task.task_end = row.task_end, task.prob_hitting_deadline = row.prob_hitting_deadline
-        RETURN count (task)
-      ", data = task_schedules)$to_data_frame()
+        #tasks = tasks [order (tasks$percent_work_rem),]
+        #tasks$order = 1:nrow (tasks)
 
-      data$tasks = get_tasks(project = isolate (input$projectSelect))
+        #write.csv (tasks, "the_tasks.csv")
+      
+        #-----
+        #Calculate starts and finishes
+        #-----  
+        task_starts = NULL
+        task_finishes = NULL
+        current_finish= time_now
+        for (i in 1:nrow (tasks)){
+          #print (current_start)
+
+          #shinyjs::logjs("max event length TO ADJUST TIMES")
+          #shinyjs::logjs(max (as.numeric (difftime (ymd_hms (ooos$end), ymd_hms (ooos$start), units= "days"))))
+
+          #current_start_time, minutes_to_add, ooos
+          adjusted_start_finish = adjust_times(current_finish, round (tasks$pert_hours[i]*60), ooos)
+          #print (adjusted_start_finish)
+          current_start = adjusted_start_finish[[1]]
+          current_finish = adjusted_start_finish[[2]] 
+          
+          task_starts = c(task_starts, as.character (current_start))
+          task_finishes = c(task_finishes, as.character (current_finish))
+        }
+
+        #shinyjs::logjs (task_starts)
+        #shinyjs::logjs (task_finishes)
+        
+        tasks$task_start = task_starts
+        tasks$task_finish = task_finishes
+
+        tasks$task_start = force_tz (ymd_hms (tasks$task_start), "UTC")
+        tasks$task_finish = force_tz (ymd_hms (tasks$task_finish), "UTC")
+        
+
+        #Probability of hitting deadlines
+        tasks = tasks[order (tasks$task_start),]
+        #showNotification (as.character (time_now))
+        tasks$prob_hitting_deadline = round (prob_hitting_deadline (time_now, tasks, ooos)*100)
+
+        #--------
+        #Add to neo4j
+        #--------
+        task_schedules = list()
+        for (i in 1:nrow (tasks)){
+          task_schedule = list()
+          task_schedule[['tsk']] = as.character (tasks [i, "Name"])
+          task_schedule[['proj']] = as.character (tasks [i, "project"])
+          task_schedule[['task_start']] = as.character (tasks [i, "task_start"])
+          task_schedule[['task_end']] = as.character (tasks [i, "task_finish"])
+          task_schedule[['prob_hitting_deadline']] = as.character (tasks [i, "prob_hitting_deadline"])
+          
+          task_schedules[[i]] = task_schedule
+        }
+        #Clear the task starts/finishes
+        graph = get_graph()
+        graph$graph$run ("
+          MATCH (task:Task)
+          SET task.task_start = null, task.task_end = null
+          ")
+        
+        #Merge the starts/finishes
+        graph = get_graph()
+        graph$graph$run ("
+          UNWIND $data AS row
+          MATCH (project:Project {name:row.proj})
+          MATCH (project) -[:HasTask]-> (task:Task {name: row.tsk})
+          SET task.task_start = row.task_start, task.task_end = row.task_end, task.prob_hitting_deadline = row.prob_hitting_deadline
+          RETURN count (task)
+        ", data = task_schedules)$to_data_frame()
+
+        data$tasks = get_tasks(project = isolate (input$projectSelect))
+        data$all_tasks = get_all_tasks()
+        data$ooos = get_events()
+
+        data$recalculate = FALSE
+      }
     }
   })
 
@@ -382,14 +589,23 @@ server <- function(input, output, session) {
   #Calendar
   #-----------------------------------------------------------
   output$taskCalendar <- renderCalendar ({
-    tasks = data$tasks
+    tasks = data$all_tasks
     ooos = data$ooos
 
     if (nrow (tasks) > 0){
+
        tasks$title = tasks$Name
-       tasks$start = tasks$Task_Start
-       tasks$end = tasks$Task_End
+       #force_tz (ymd_hms (tasks$task_start), "UTC")
+       #shinyjs::logjs (tasks$Task_Start)
+       tasks$start = with_tz (ymd_hms (tasks$Task_Start, tz = "UTC"), tzone = "Europe/London")
+       tasks$end = with_tz (ymd_hms (tasks$Task_End, tz = "UTC"), tzone = "Europe/London")
+      
        tasks$calendarId = "tasks"
+
+
+      # ooos$start = with_tz (ymd_hms (ooos$start, tz = "UTC"), tzone = "Europe/London")
+       ooos$start = with_tz (ooos$start, tzone = "Europe/London")
+       ooos$end = with_tz (ooos$end, tzone = "Europe/London")
 
        ooos$title = ooos$name
        ooos$calendarId = "events"
@@ -400,6 +616,7 @@ server <- function(input, output, session) {
           add_schedule_df(tasks) %>%
           add_schedule_df(ooos)
     } else {
+      #print ("Hi")
       calendar(readOnly = FALSE, useNav = TRUE)
     }
   })
@@ -418,7 +635,44 @@ server <- function(input, output, session) {
   #   get_calendar(auth[[3]])
   # )
  
+  #-------------------------------------------------
+  #Timelines
+  #-------------------------------------------------
   
+  output$taskTimeline <- renderTimevis ({
+  #output$taskTimeline <- renderPlotly ({
+    tasks = data$all_tasks
+
+    if (nrow (tasks) > 0){
+
+      tasks$start = tasks$Task_Start
+      tasks$end = tasks$Task_End
+
+      groups <- data.frame(
+        id = unique (tasks$Name),
+        content = unique (tasks$Name)
+        )
+
+    #   deadlines = tasks#[,c("Name", "Deadline")]
+    #   deadlines$start = deadlines$Deadline
+    #   deadlines$end = deadlines$Deadline
+    # # deadlines$Name = paste (deadlines$Name, " deadline")
+    #   tasks = rbind (tasks, deadlines)
+
+      tasks$group = tasks$Name
+      tasks$content = tasks$Name
+
+      #vistime (tasks, events = "events")
+      
+      timevis(tasks, groups = groups)
+    }
+  })
+  # output$taskTimeline <- renderPlotly({
+  #   tasks = data$all_tasks
+  #   tasks$start = tasks$task_start
+  #   tasks$end = tasks$task_end
+  #   vistime(tasks, start = "start", end = "end", events = "Name")
+  # })
 
   #-----------------------------------------------
   #Projects
@@ -509,26 +763,87 @@ server <- function(input, output, session) {
   observe ({
     if (nrow (data$current_task) > 0){
       updateTextInput(session = session, "taskName", value = data$current_task$Name)
-      updateAirDateInput(session = session, "taskDeadline", value = ymd_hms(data$current_task$Deadline))
+      updateAirDateInput(session = session, "taskDeadline", value = data$current_task$Deadline)
       updateNumericInput(session = session, "taskLikelyDuration", value = data$current_task$Most_Likely_Hours)
       updateNumericInput(session = session, "taskMinDuration", value = data$current_task$Min_Hours)
-      updateNumericInput(session = session, "taskMinDuration", value = data$current_task$Max_Hours)
+      updateNumericInput(session = session, "taskMaxDuration", value = data$current_task$Max_Hours)
+      updateSliderInput(session = session, "taskPercentComplete", value = data$current_task$Percent_Complete)
     }
   })
 
   observeEvent (input$taskTable_rows_selected, {
     data$current_task = data$tasks [input$taskTable_rows_selected,]
+
   })
 
   output$taskTable <- renderDataTable({
-     data$tasks
-   }, selection = "single")
+     tasks = data$tasks
+
+     if (!input$showComplete){
+       tasks = tasks [tasks$Percent_Complete < 100,]
+     }
+    
+     shinyjs::logjs ("data table")
+     shinyjs::logjs (tasks)
+
+
+     shinyjs::logjs (colnames (tasks))
+     
+     brks <- seq(5, 95, 5) #quantile(df, probs = seq(.05, .95, .05), na.rm = TRUE)
+     clrs <- rev (round(seq(255, 40, length.out = length(brks) + 1), 0) %>%
+              {paste0("rgb(255,", ., ",", ., ")")})
+
+     if (("Task_Start" %in% colnames (tasks)) & (nrow (tasks) > 0)){
+        #if (sum (is.na (tasks$Task_Start) > 0)){
+        tasks$Task_Start [is.na (tasks$Task_Start)] = "None"
+        tasks$Task_End [is.na (tasks$Task_End)] = "None"
+        #}
+
+         shinyjs::logjs ("data table2")
+         shinyjs::logjs (tasks)
+
+        tasks$Task_Start = as.character (tasks$Task_Start)
+        tasks$Task_End = as.character (tasks$Task_End)
+
+        tasks = tasks [order (tasks$Task_Start),]
+        data$tasks = tasks
+
+    
+     
+        datatable (tasks,  selection = "single") %>%
+          formatStyle("Prob_Hitting_Deadline", backgroundColor = styleInterval(brks, clrs)) %>%
+          formatStyle(
+              'Percent_Complete',
+              background = styleColorBar(c(0,101), 'lightblue'),
+              backgroundSize = '98% 88%',
+              backgroundRepeat = 'no-repeat',
+              backgroundPosition = 'center'
+            )
+     } else {
+        datatable ()#tasks,  selection = "single")
+     }
+   })
 
   observeEvent (input$projectSelect,{
-    data$tasks = get_tasks(input$projectSelect)
+    if (input$projectSelect != "All"){
+      data$tasks = get_tasks(input$projectSelect)
+    } else {
+      data$tasks = get_all_tasks()
+    }
   })
 
   observeEvent (input$addTaskBtn, {
+    #showNotification(input$taskDeadline)
+    #deadline = as.character (with_tz (ymd_hms (input$taskDeadline), tzone = Sys.timezone()))
+    #deadline = with_tz (ymd_hms (input$taskDeadline, tz = Sys.timezone()), tzone = "Europe/London")
+    #showNotification(deadline)
+    #shinyjs::logjs("deadline")
+    #deadline = as.character (format (deadline, "%Y/%m/%d %H:%M:%S"))
+    #showNotification(deadline)
+    #shinyjs::logjs(as.character (deadline))
+
+    deadline = ymd_hms (input$taskDeadline, tz = "UTC")
+
     if (input$projectSelect != "All"){
       #Merge task
       graph = get_graph()
@@ -537,13 +852,15 @@ server <- function(input, output, session) {
         SET task.deadline = $deadline, 
             task.most_likely_hours = $most_likely_hours,
             task.min_hours = $min_hours,
-            task.max_hours = $max_hours
+            task.max_hours = $max_hours,
+            task.percent_complete = $percent_complete
       ", name = as.character (input$taskName), 
          project = as.character (input$projectSelect), 
-         deadline = as.character (input$taskDeadline),
+         deadline = as.character(deadline), #as.character (input$taskDeadline),
          most_likely_hours = as.numeric (input$taskLikelyDuration),
          min_hours = as.numeric (input$taskMinDuration),
-         max_hours = as.numeric (input$taskMaxDuration)
+         max_hours = as.numeric (input$taskMaxDuration),
+         percent_complete = as.numeric (input$taskPercentComplete)
          )
 
         #Clear dependencies
@@ -571,6 +888,8 @@ server <- function(input, output, session) {
         }
 
       data$tasks = get_tasks(input$projectSelect)
+      data$recalculate = TRUE
+      #data$all_tasks = get_all_tasks()
     }
   })
 
@@ -583,6 +902,8 @@ server <- function(input, output, session) {
       ", name = as.character (input$taskName), project = as.character (input$projectSelect))
 
       data$tasks = get_tasks(input$projectSelect)
+
+      data$recalculate = TRUE
     }
   })
 
